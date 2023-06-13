@@ -145,7 +145,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
                 // writer.write(&startCode);
                 // writer.write(payload);
                 // println!("Is Unit Access Code",)
-                self.nal_parser.beginPacket(payload);
+                self.nal_parser.begin_packet(payload);
                 // let accessCode = NALParser::is_four_byte_nalunit(
                 //     6,
                 //     HeaderCode::Sps,
@@ -184,7 +184,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
         // let startCode:[u8;4] = [ 0x00, 0x00, 0x00, 0x01];
         // writer.write(&startCode);
         // writer.write(data);
-        self.nal_parser.continuePacket(data);
+        self.nal_parser.continue_packet(data);
 
         // println!(
         //     "{:?}:                     continues {:02x}",
@@ -194,7 +194,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
         self.len = self.len.map(|l| l + data.len());
     }
     fn end_packet(&mut self, _ctx: &mut DumpDemuxContext) {
-        self.nal_parser.endPacket();
+        self.nal_parser.end_packet();
         // println!("{:?}: end of packet length={:?}", self.pid, self.len);
     }
     fn continuity_error(&mut self, _ctx: &mut DumpDemuxContext) {}
