@@ -1,0 +1,16 @@
+[package]
+name = "mpeg2ts-reader-shootout"
+version = "0.0.1"
+publish = false
+
+[dependencies]
+mpeg2ts = "0.1.1"
+mpeg2ts-reader = { path = ".." }
+ffmpeg-sys = { git = "https://github.com/EgorDm/rust-ffmpeg-sys" }
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "bench"
+harness = false
