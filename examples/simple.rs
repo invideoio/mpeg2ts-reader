@@ -18,6 +18,7 @@ use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use byteorder::{WriteBytesExt, LittleEndian};
 use mpeg2ts_reader::parser::{HeaderCode, NALParser};
+use mpeg2ts_reader::pes::Timestamp;
 
 // This macro invocation creates an enum called DumpFilterSwitch, encapsulating all possible ways
 // that this application may handle transport stream packets.  Each enum variant is just a wrapper
@@ -71,7 +72,7 @@ impl DumpDemuxContext {
                 pmt,
                 stream_info,
                 ..
-            } => PtsDumpElementaryStreamConsumer::construct(pmt, stream_info,NALParser::new()),
+            } => PtsDumpElementaryStreamConsumer::construct(pmt, stream_info),
             // We need to have a match-arm to specify how to handle any other StreamType values
             // that might be present; we answer with NullPacketFilter so that anything other than
             // H264 (handled above) is ignored,
@@ -96,48 +97,50 @@ impl DumpDemuxContext {
 
 // Implement the ElementaryStreamConsumer to just dump and PTS/DTS timestamps to stdout
 pub struct PtsDumpElementaryStreamConsumer {
-    pid: packet::Pid,
-    len: Option<usize>,
     nal_parser: NALParser,
+    packet_end_ts: f64,
+    is_first_packet: bool
 }
+
 impl PtsDumpElementaryStreamConsumer {
     fn construct(
         _pmt_sect: &psi::pmt::PmtSection,
         stream_info: &psi::pmt::StreamInfo,
-        nal_parser:NALParser,
     ) -> DumpFilterSwitch {
         let filter = pes::PesPacketFilter::new(PtsDumpElementaryStreamConsumer {
-            pid: stream_info.elementary_pid(),
-            len: None,
-            nal_parser:NALParser::new(),
+            nal_parser: NALParser::new(),
+            packet_end_ts: 0.0,
+            is_first_packet: false
         });
         DumpFilterSwitch::Pes(filter)
+    }
+
+    fn time_in_seconds(pts: Timestamp) -> f64 {
+        (pts.value() as f64 * 1.0) / (Timestamp::TIMEBASE as f64)
     }
 }
 
 impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStreamConsumer {
-    fn start_stream(&mut self, _ctx: &mut DumpDemuxContext) {}
+    fn start_stream(&mut self, _ctx: &mut DumpDemuxContext) {
+        self.is_first_packet = true;
+    }
+
     fn begin_packet(&mut self, _ctx: &mut DumpDemuxContext, header: pes::PesHeader) {
         match header.contents() {
             pes::PesContents::Parsed(Some(parsed)) => {
                 match parsed.pts_dts() {
                     Ok(pes::PtsDts::PtsOnly(Ok(pts))) => {
-
-                        // print!("Start{:?}: pts {}                ", self.pid, pts.value())
+                        if self.is_first_packet {
+                            self.nal_parser.decoding_delay(Self::time_in_seconds(pts));
+                            self.is_first_packet = false;
+                        } else {
+                            self.nal_parser.set_duration_for_previous_packet(Self::time_in_seconds(pts));
+                        }
+                        self.packet_end_ts = Self::time_in_seconds(pts);
                     }
-                    Ok(pes::PtsDts::Both {
-                        pts: Ok(pts),
-                        dts: Ok(dts),
-                    }) => print!(
-                        "....{:?}: pts {:#08x} dts {:#08x} ",
-                        self.pid,
-                        pts.value(),
-                        dts.value()
-                    ),
                     _ => (),
                 }
                 let payload = parsed.payload();
-                self.len = Some(payload.len());
                 let mut output_file = File::options().append(true).open("a.dat").expect("test");
 
                 let mut writer = BufWriter::new(output_file);
@@ -162,7 +165,6 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
             }
             pes::PesContents::Parsed(None) => (),
             pes::PesContents::Payload(payload) => {
-                self.len = Some(payload.len());
 
                 // println!(
                 //     "......{:?}:                               {:02x}",
@@ -185,18 +187,12 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
         // writer.write(&startCode);
         // writer.write(data);
         self.nal_parser.continue_packet(data);
+    }
 
-        // println!(
-        //     "{:?}:                     continues {:02x}",
-        //     self.pid,
-        //     data[..cmp::min(data.len(), 16)].plain_hex(false)
-        // );
-        self.len = self.len.map(|l| l + data.len());
-    }
     fn end_packet(&mut self, _ctx: &mut DumpDemuxContext) {
-        self.nal_parser.end_packet();
-        // println!("{:?}: end of packet length={:?}", self.pid, self.len);
+        self.nal_parser.end_packet(self.packet_end_ts);
     }
+
     fn continuity_error(&mut self, _ctx: &mut DumpDemuxContext) {}
 }
 
@@ -232,7 +228,6 @@ fn main() {
     // }
 
 
-
     // for chunk in data {
     //     let test = file.expect("REASON").write_all(&chunk);
     // }
@@ -252,5 +247,4 @@ fn main() {
     //     writer.write(&buf).expect("Test1");
     // }
     // writer.flush();
-
 }

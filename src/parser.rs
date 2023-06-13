@@ -1,4 +1,5 @@
 use std::io::Read;
+use crate::parser::VideoFrameType::{DeltaFrame, KeyFrame};
 
 #[derive(Clone, Copy)]
 pub enum HeaderCode {
@@ -48,23 +49,48 @@ pub struct DemuxedSegment {
     pps: Option<Vec<u8>>,
     frame_type: VideoFrameType,
     frame_payload: Option<Vec<u8>>,
+    start_ts: f64, // in seconds
+    duration: f64 // in seconds
+}
+
+impl DemuxedSegment {
+    fn new(frame_type: VideoFrameType, start_ts: f64) -> DemuxedSegment {
+        DemuxedSegment {
+            sps: None,
+            pps: None,
+            frame_type,
+            frame_payload: None,
+            start_ts,
+            duration: 0.0,
+        }
+    }
 }
 
 pub struct NALParser {
     state: ParseState,
+    decoding_delay: f64, // in seconds
     raw_data: Option<Vec<u8>>,
     segments: Option<Vec<DemuxedSegment>>,
     sei_found: bool,
 }
 
 impl NALParser {
+
+}
+
+impl NALParser {
     pub fn new() -> Self {
         return NALParser {
             state: ParseState::Sps,
+            decoding_delay: 0.0,
             raw_data: None,
             segments: Some(Vec::new()),
             sei_found: false,
         };
+    }
+
+    pub fn decoding_delay(&mut self, delay_ts: f64) {
+        self.decoding_delay = delay_ts;
     }
 
     pub fn begin_packet(&mut self, payload: &[u8]) {
@@ -77,25 +103,33 @@ impl NALParser {
         }
     }
 
-    pub fn end_packet(&mut self) {
+    pub fn set_duration_for_previous_packet(&mut self, next_packet_pts: f64) {
+        if let Some(ref mut segments) = self.segments {
+            let last_segment = segments.last_mut().unwrap();
+            last_segment.duration = next_packet_pts - last_segment.start_ts - self.decoding_delay;
+            println!("Packet start = {} and duration = {}", last_segment.start_ts, last_segment.duration);
+        }
+    }
+
+    pub fn end_packet(&mut self, pts: f64) {
         if let Some(ref vec) = self.raw_data {
             let sps_header_index = NALParser::index_of_payload(vec,
                                                                HeaderCode::delimiter_length(),
                                                                HeaderCode::Sps);
             let mut active_segment: DemuxedSegment;
+
+            // duration for the packet will be calculated when we get the pts for next packet
+            let start_ts = pts - self.decoding_delay;
+
             if sps_header_index.start_index.is_some() { // key frame
-                active_segment = DemuxedSegment {
-                    sps: None,
-                    pps: None,
-                    frame_type: VideoFrameType::KeyFrame,
-                    frame_payload: None,
-                };
+                active_segment = DemuxedSegment::new(KeyFrame, start_ts);
                 let pps_header_index = NALParser::index_of_payload(vec,
                                                                    sps_header_index.end_index.unwrap(),
                                                                    HeaderCode::Pps,);
                 if let Some(pps_end_index) = pps_header_index.end_index {
                     active_segment.sps = get_header_payload(&pps_header_index, &vec);
                     Self::print(&pps_header_index, HeaderCode::Sps);
+
                     let header = if self.sei_found == true { HeaderCode::KeyFrame } else { HeaderCode::Sei };
                     let sei_or_key_frame_index = NALParser::index_of_payload(vec,
                                                                              pps_end_index, header);
@@ -114,6 +148,7 @@ impl NALParser {
                     } else {
                         active_segment.pps = get_header_payload(&sei_or_key_frame_index, &vec);
                         key_frame_header_end_index = sei_or_key_frame_index.end_index.unwrap_or_else(|| 0);
+
                         Self::print(&sei_or_key_frame_index, HeaderCode::Pps);
                     }
                     self.sei_found = true;
@@ -124,12 +159,7 @@ impl NALParser {
                     }
                 }
             } else { // delta frame
-                active_segment = DemuxedSegment {
-                    sps: None,
-                    pps: None,
-                    frame_type: VideoFrameType::DeltaFrame,
-                    frame_payload: None,
-                };
+                active_segment = DemuxedSegment::new(DeltaFrame, start_ts);
 
                 let header_size = HeaderCode::iframe_header_prefix_byte_count();
                 if let Some(delta_frame_data) = &self.raw_data {
