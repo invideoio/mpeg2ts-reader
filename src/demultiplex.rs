@@ -621,6 +621,7 @@ impl<Ctx: DemuxContext> Demultiplex<Ctx> {
     /// `DemuxContent` object
     pub fn push(&mut self, ctx: &mut Ctx, buf: &[u8]) {
         // TODO: simplify
+        println!("Akki demuxe push");
         let mut itr = buf
             .chunks_exact(packet::Packet::SIZE)
             .map(packet::Packet::try_new);
@@ -650,14 +651,18 @@ impl<Ctx: DemuxContext> Demultiplex<Ctx> {
                         pk.transport_scrambling_control()
                     );
                 } else {
+                    // println!("Akki pushing buf from demux content");
                     this_proc.consume(ctx, &pk);
                     if !ctx.filter_changeset().is_empty() {
+                        println!("inner break");
                         break 'inner;
                     }
                 }
                 pk = if let Some(Some(p)) = itr.next() {
+                    // println!("Akki next buffer get");
                     p
                 } else {
+                    println!("Akki break outer with continue = {}", pk.pid() != this_pid);
                     break 'outer;
                 };
                 if pk.pid() != this_pid {
@@ -671,6 +676,7 @@ impl<Ctx: DemuxContext> Demultiplex<Ctx> {
             pk = if let Some(Some(p)) = itr.next() {
                 p
             } else {
+                println!("Akki break outer 2");
                 break 'outer;
             };
         }

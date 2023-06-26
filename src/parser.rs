@@ -107,7 +107,7 @@ impl NALParser {
         if let Some(ref mut segments) = self.segments {
             let last_segment = segments.last_mut().unwrap();
             last_segment.duration = next_packet_pts - last_segment.start_ts - self.decoding_delay;
-            println!("Packet start = {} and duration = {}", last_segment.start_ts, last_segment.duration);
+            // println!("Packet start = {} and duration = {}", last_segment.start_ts, last_segment.duration);
         }
     }
 
@@ -155,7 +155,7 @@ impl NALParser {
 
                     if let Some(key_frame_data) = &self.raw_data {
                         active_segment.frame_payload = Some(vec[key_frame_header_end_index..key_frame_data.len()].to_vec());
-                        println!("Packet :KeyFrame Payload size {}", key_frame_data.len() - key_frame_header_end_index);
+                        // println!("Packet :KeyFrame Payload size {}", key_frame_data.len() - key_frame_header_end_index);
                     }
                 }
             } else { // delta frame
@@ -164,7 +164,7 @@ impl NALParser {
                 let header_size = HeaderCode::iframe_header_prefix_byte_count();
                 if let Some(delta_frame_data) = &self.raw_data {
                     active_segment.frame_payload = Some(vec[header_size..delta_frame_data.len()].to_vec());
-                    println!("delta frame size {}", delta_frame_data.len() - header_size);
+                    // println!("delta frame size {}", delta_frame_data.len() - header_size);
                 }
             }
             if let Some(ref mut demux_segments) = self.segments {

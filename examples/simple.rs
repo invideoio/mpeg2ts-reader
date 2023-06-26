@@ -148,6 +148,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
                 // writer.write(&startCode);
                 // writer.write(payload);
                 // println!("Is Unit Access Code",)
+                // println!("Packet begins with payload = {}", payload.len());
                 self.nal_parser.begin_packet(payload);
                 // let accessCode = NALParser::is_four_byte_nalunit(
                 //     6,
@@ -183,6 +184,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
         let mut output_file = File::options().append(true).open("a.dat").expect("test");
 
         let mut writer = BufWriter::new(output_file);
+        // println!("Packet continues with payload = {}", data.len());
         // let startCode:[u8;4] = [ 0x00, 0x00, 0x00, 0x01];
         // writer.write(&startCode);
         // writer.write(data);
@@ -190,6 +192,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
     }
 
     fn end_packet(&mut self, _ctx: &mut DumpDemuxContext) {
+        // println!("Packet end ts = {}", self.packet_end_ts);
         self.nal_parser.end_packet(self.packet_end_ts);
     }
 
@@ -234,8 +237,12 @@ fn main() {
 
     loop {
         match f.read(&mut buf[..]).expect("read failed") {
-            0 => break,
+            0 => {
+                println!("Akki demux break");
+                break;
+            },
             n => {
+                println!("Akki demux pushed 1");
                 demux.push(&mut ctx, &buf[0..n]);
                 // writer.write(&buf);
             }//demux.push(&mut ctx, &buf[0..n]),
