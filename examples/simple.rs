@@ -192,7 +192,7 @@ impl pes::ElementaryStreamConsumer<DumpDemuxContext> for PtsDumpElementaryStream
     }
 
     fn end_packet(&mut self, _ctx: &mut DumpDemuxContext) {
-        // println!("Packet end ts = {}", self.packet_end_ts);
+        println!("Packet end ts = {}", self.packet_end_ts);
         self.nal_parser.end_packet(self.packet_end_ts);
     }
 
@@ -238,11 +238,9 @@ fn main() {
     loop {
         match f.read(&mut buf[..]).expect("read failed") {
             0 => {
-                println!("Akki demux break");
                 break;
             },
             n => {
-                println!("Akki demux pushed 1");
                 demux.push(&mut ctx, &buf[0..n]);
                 // writer.write(&buf);
             }//demux.push(&mut ctx, &buf[0..n]),

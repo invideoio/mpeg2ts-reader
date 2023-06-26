@@ -164,7 +164,7 @@ impl NALParser {
                 let header_size = HeaderCode::iframe_header_prefix_byte_count();
                 if let Some(delta_frame_data) = &self.raw_data {
                     active_segment.frame_payload = Some(vec[header_size..delta_frame_data.len()].to_vec());
-                    // println!("delta frame size {}", delta_frame_data.len() - header_size);
+                    println!("delta frame size {}", delta_frame_data.len() - header_size);
                 }
             }
             if let Some(ref mut demux_segments) = self.segments {

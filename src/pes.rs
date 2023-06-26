@@ -88,8 +88,10 @@ where
         if let Some(cc) = self.ccounter {
             // counter only increases if the packet has a payload,
             let result = if packet.adaptation_control().has_payload() {
+                println!("Adaptation control has payload");
                 packet.continuity_counter().follows(cc)
             } else {
+                println!("Adaptation control does not have payload with count 1 = {} and 2 = {}", packet.continuity_counter().count(), cc.count());
                 packet.continuity_counter().count() == cc.count()
             };
             if !result {
@@ -110,16 +112,17 @@ where
 
     #[inline(always)]
     fn consume(&mut self, ctx: &mut Self::Ctx, packet: &packet::Packet<'_>) {
-        // println!("Akki payload unit consumes with payload state = {:?}", self.state);
         if !self.is_continuous(packet) {
             self.stream_consumer.continuity_error(ctx);
             self.state = PesState::IgnoreRest;
         }
         self.ccounter = Some(packet.continuity_counter());
-        // println!("Akki payload unit consumes with payload state = {:?}", self.state);
         if packet.payload_unit_start_indicator() {
             if self.state == PesState::Started {
                 self.stream_consumer.end_packet(ctx);
+            } else if self.state == PesState::IgnoreRest {
+                self.stream_consumer.end_packet(ctx);
+                self.state = PesState::Started;
             } else {
                 // we might be in PesState::IgnoreRest, in which case we don't want to signal
                 // a stream_start() to the consumer, which has already received stream_start()
